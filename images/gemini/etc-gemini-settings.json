@@ -17,6 +17,19 @@
         "default": "gemini-3.6-flash",
         "contexts": []
       }
+    },
+    "customAliases": {
+      "gemini-3-flash-base": {
+        "extends": "base",
+        "modelConfig": {
+          "model": "gemini-3.6-flash"
+        }
+      },
+      "agent-history-provider-summarizer": {
+        "modelConfig": {
+          "model": "gemini-3.6-flash"
+        }
+      }
     }
   }
 }

@@ -212,22 +212,31 @@ The shell function above already includes the two flags that activate it:
 `GEMINI_CLI_SYSTEM_SETTINGS_PATH` points to a system-level settings file that is merged
 with the highest priority (above user and workspace settings). The file enables
 `experimental.dynamicModelConfiguration`, which activates a settings-driven model
-resolution path, and then overrides `classifierIdResolutions.flash` to resolve to
-`gemini-3.6-flash`.
+resolution path. It overrides two distinct model resolution paths:
 
-**Why `"contexts": []` is required.** Without it, the deep merge preserves the default
-`contexts` array from the built-in schema. That array contains a condition
-(`useGemini3_5Flash: true`) that fires for users with GA flash access and returns
-`gemini-3.5-flash` before the `default` value is ever evaluated. Setting `contexts` to an
-empty array clears all conditional overrides so the `default` model is always used.
+**`classifierIdResolutions.flash`** — controls the main chat flash tier (Auto mode).
+Setting `"default": "gemini-3.6-flash"` with `"contexts": []` redirects all
+flash-tier chat to `gemini-3.6-flash`. The empty `contexts` array is required
+to prevent the built-in conditional (`useGemini3_5Flash: true`) from firing and
+returning `gemini-3.5-flash` before the default is evaluated.
+
+**`customAliases`** — controls subagent model selection. Subagents (web-search,
+web-fetch, loop-detection, etc.) resolve their model via the alias inheritance
+chain, not `classifierIdResolutions`. Overriding `gemini-3-flash-base` in
+`customAliases` redirects all seven subagent aliases that extend it. The
+`agent-history-provider-summarizer` alias is also overridden directly, as it
+hard-codes `gemini-3-flash-preview` without inheriting from `gemini-3-flash-base`.
 
 ### Verified model usage (Auto mode with override active)
 
 ```
-gemini-3.1-flash-lite   utility_router   complexity classifier (unchanged)
-gemini-3.6-flash        main             flash-tier tasks
-gemini-3.1-pro-preview  main             pro-tier tasks (unchanged)
+gemini-3.1-flash-lite   utility_router     complexity classifier (unchanged)
+gemini-3.1-flash-lite   utility_summarizer
+gemini-3.6-flash        main               flash-tier tasks
+gemini-3.6-flash        utility_tool       subagents (web-search, web-fetch, loop-detection, etc.)
 ```
+
+`gemini-3-flash-preview` no longer appears anywhere in the session summary.
 
 ---
 
