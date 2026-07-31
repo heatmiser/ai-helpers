@@ -63,6 +63,25 @@ the Generative Language API enabled.
 In [Google Cloud Console](https://console.cloud.google.com), select or create a project,
 then navigate to **APIs & Services → Library** and enable **Generative Language API**.
 
+> **Generative Language API vs Vertex AI API:** These are distinct APIs. Enabling the
+> Vertex AI API (common in enterprise GCP environments) does not cover the Generative
+> Language API. The `gemini-cli` API key path requires `generativelanguage.googleapis.com`
+> specifically — enable it even if Vertex AI is already active on the project.
+
+> **Cost:** `gemini-cli` defaults to **Auto** mode, which routes between
+> `gemini-3.5-flash` (free tier available; data used to improve Google products) and
+> `gemini-3.1-pro-preview` (no free tier — $2.00/$12.00 per 1M tokens) depending on task
+> complexity. Rates shown are standard tier for personal GCP accounts. Enable billing on
+> the GCP project before use; complex prompts will route to Pro. To stay on the free tier,
+> pin the model explicitly: `gemini --model gemini-3.5-flash` or set
+> `GEMINI_MODEL=gemini-3.5-flash` in your environment. See the
+> [Gemini API pricing page](https://ai.google.dev/gemini-api/docs/pricing) for current rates.
+>
+> **Enterprise pricing:** Organizations with existing Google Cloud or Workspace agreements
+> can negotiate custom per-token rates directly with Google Cloud sales; AI API usage is
+> often bundled into Enterprise License Agreements (ELAs). While each deal is unique,
+> negotiated rates are lower than the standard single-account rate card.
+
 #### 2. Create an API key
 
 Navigate to **APIs & Services → Credentials → Create Credentials → API key**.
