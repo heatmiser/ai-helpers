@@ -102,34 +102,31 @@ chmod 600 ~/.config/gemini/api-key
 The key never touches the container image — it is injected at runtime via environment
 variable read from this file.
 
+#### 4. Configure `~/.gemini/settings.json`
+
+Gemini CLI reads `~/.gemini/settings.json` for user preferences. When the container mounts
+`~/.gemini`, this file controls the auth method. Without it (or with the default
+`oauth-personal`), the container prompts for browser-based OAuth on every launch — which
+fails in containerised environments because there is no keyring daemon.
+
+Create `~/.gemini/settings.json` on the host:
+
+```json
+{
+  "security": {
+    "auth": {
+      "selectedType": "gemini-api-key"
+    }
+  },
+  "ui": {
+    "useAlternateBuffer": false
+  }
+}
+```
+
 ---
 
 ## Running the container
-
-### Interactive session
-
-```bash
-podman run -it --rm \
-    --pull newer \
-    --userns=keep-id \
-    -e GEMINI_API_KEY="$(cat ~/.config/gemini/api-key)" \
-    -e GEMINI_CLI_TRUST_WORKSPACE=true \
-    -e GH_TOKEN=$(gh auth token) \
-    -e COLORTERM=truecolor \
-    -v "$(pwd):$(pwd):z" \
-    -w "$(pwd)" \
-    quay.io/s4v0/gemini-ai-helpers:latest
-```
-
-Key flags:
-
-| Flag | Purpose |
-|------|---------|
-| `--userns=keep-id` | Maps your UID into the container — files you create are owned by you |
-| `GEMINI_CLI_TRUST_WORKSPACE=true` | Suppresses the workspace trust prompt on every launch |
-| `GH_TOKEN` | Passes your GitHub auth into the container for `gh` CLI access |
-| `-v "$(pwd):$(pwd):z"` | Mounts your current directory at the same path; `:z` applies the SELinux shared label |
-| `-w "$(pwd)"` | Sets the working directory inside the container to match the host |
 
 ### Shell function (add to `~/.bashrc`)
 
@@ -142,13 +139,30 @@ function gemini-ai() {
         --userns=keep-id \
         -e GEMINI_API_KEY="$(cat ~/.config/gemini/api-key)" \
         -e GEMINI_CLI_TRUST_WORKSPACE=true \
+        -e GEMINI_CLI_SYSTEM_SETTINGS_PATH=/etc/gemini/settings.json \
         -e GH_TOKEN=$(gh auth token) \
+        -e TERM="${TERM:-xterm-256color}" \
         -e COLORTERM=truecolor \
+        -v ~/.gemini:/home/gemini/.gemini:z \
+        -v ~/gemini-cli-cntr-includes/etc-gemini-settings.json:/etc/gemini/settings.json:ro,z \
         -v "$(pwd):$(pwd):z" \
         -w "$(pwd)" \
         quay.io/s4v0/gemini-ai-helpers:latest "$@"
 }
 ```
+
+Key flags:
+
+| Flag | Purpose |
+|------|---------|
+| `--userns=keep-id` | Maps your UID into the container — files you create are owned by you |
+| `GEMINI_CLI_TRUST_WORKSPACE=true` | Suppresses the workspace trust prompt on every launch |
+| `GEMINI_CLI_SYSTEM_SETTINGS_PATH` | Points gemini-cli to the system-level settings override file |
+| `GH_TOKEN` | Passes your GitHub auth into the container for `gh` CLI access |
+| `-v ~/.gemini:...` | Persists conversation history and reads `~/.gemini/settings.json` for auth type |
+| `-v ...etc-gemini-settings.json:...` | Injects the model routing override (see below); `:ro,z` = read-only + SELinux label |
+| `-v "$(pwd):$(pwd):z"` | Mounts your current directory at the same path |
+| `-w "$(pwd)"` | Sets the working directory inside the container to match the host |
 
 The `[ -t 0 ]` check detects whether stdin is a terminal and conditionally adds `--tty`,
 so the function works in both interactive and piped/scripted contexts.
@@ -164,6 +178,55 @@ Then invoke from any directory:
 ```bash
 gemini-ai
 gemini-ai -p "Summarise the last 5 commits in this repo"
+```
+
+---
+
+## Optional: model routing override
+
+Gemini CLI's **Auto** mode uses a numerical classifier (running on `gemini-3.1-flash-lite`)
+to score each prompt and route it to either a flash or pro model. The bundled
+`etc-gemini-settings.json` in this directory overrides the flash target to
+`gemini-3.6-flash` (the latest GA flash model as of mid-2025) without rebuilding the
+container image.
+
+### Setup
+
+Create the includes directory and copy the settings file:
+
+```bash
+mkdir -p ~/gemini-cli-cntr-includes
+cp /path/to/ai-helpers/images/gemini/etc-gemini-settings.json \
+   ~/gemini-cli-cntr-includes/
+```
+
+The shell function above already includes the two flags that activate it:
+
+```
+-e GEMINI_CLI_SYSTEM_SETTINGS_PATH=/etc/gemini/settings.json
+-v ~/gemini-cli-cntr-includes/etc-gemini-settings.json:/etc/gemini/settings.json:ro,z
+```
+
+### How it works
+
+`GEMINI_CLI_SYSTEM_SETTINGS_PATH` points to a system-level settings file that is merged
+with the highest priority (above user and workspace settings). The file enables
+`experimental.dynamicModelConfiguration`, which activates a settings-driven model
+resolution path, and then overrides `classifierIdResolutions.flash` to resolve to
+`gemini-3.6-flash`.
+
+**Why `"contexts": []` is required.** Without it, the deep merge preserves the default
+`contexts` array from the built-in schema. That array contains a condition
+(`useGemini3_5Flash: true`) that fires for users with GA flash access and returns
+`gemini-3.5-flash` before the `default` value is ever evaluated. Setting `contexts` to an
+empty array clears all conditional overrides so the `default` model is always used.
+
+### Verified model usage (Auto mode with override active)
+
+```
+gemini-3.1-flash-lite   utility_router   complexity classifier (unchanged)
+gemini-3.6-flash        main             flash-tier tasks
+gemini-3.1-pro-preview  main             pro-tier tasks (unchanged)
 ```
 
 ---

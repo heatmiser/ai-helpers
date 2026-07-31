@@ -1,0 +1,22 @@
+{
+  "experimental": {
+    "dynamicModelConfiguration": true
+  },
+  "modelConfigs": {
+    "modelDefinitions": {
+      "gemini-3.6-flash": {
+        "tier": "flash",
+        "family": "gemini-3",
+        "isPreview": false,
+        "isVisible": true,
+        "features": { "thinking": false, "multimodalToolUse": true }
+      }
+    },
+    "classifierIdResolutions": {
+      "flash": {
+        "default": "gemini-3.6-flash",
+        "contexts": []
+      }
+    }
+  }
+}
